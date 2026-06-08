@@ -1,0 +1,83 @@
+{
+  "theme": "LIGHT",
+  "archetype": "Archetype 1: Organic & Earthy",
+  "design_philosophy": "A visually inspiring, calm, and structured travel planner. Using generous spacing to let destination imagery shine and clean bento grids for itinerary details.",
+  "colors": {
+    "background": "#F7F5F0",
+    "surface": "#FFFFFF",
+    "surface_glass": "rgba(255, 255, 255, 0.8)",
+    "primary": "#E27D60", 
+    "secondary": "#81B29A",
+    "text_main": "#1F2937",
+    "text_muted": "#4B5563",
+    "border": "#E5E7EB",
+    "hover_state": "#D96C4E"
+  },
+  "typography": {
+    "heading_font": "Outfit",
+    "body_font": "Manrope",
+    "hierarchy": {
+      "h1": "text-5xl sm:text-6xl tracking-tight font-light",
+      "h2": "text-3xl sm:text-4xl tracking-tight font-medium",
+      "h3": "text-xl sm:text-2xl font-medium",
+      "body": "text-base leading-relaxed text-gray-700",
+      "small_label": "text-sm uppercase tracking-[0.2em] font-bold text-gray-500"
+    }
+  },
+  "layout_and_spacing": {
+    "philosophy": "Generous Spacing Philosophy with Bento Grids",
+    "spacing_scale": "p-8, p-12 for sections. Cards have p-6 inner padding.",
+    "container_radius": "rounded-2xl for cards, rounded-3xl for main imagery",
+    "borders": "1px solid #E5E7EB on cards, no heavy shadows. Subtle drop-shadow-sm.",
+    "grid_pattern": "Bento grids for dashboard. grid-cols-1 md:grid-cols-12 with varied spans."
+  },
+  "components": {
+    "buttons": "Rounded-full, solid primary bg for CTAs, clear hover states with slightly darker background and transform translate-y-[-2px].",
+    "cards": "Flat background with 1px border. Never heavy shadows. Hover lifts slightly.",
+    "forms": "Shadcn/UI inputs with customized rounded borders (rounded-xl) and soft focus rings.",
+    "navigation": "Sticky glassmorphism header (backdrop-blur-xl bg-white/70) with z-50.",
+    "images": "Hero max-h-[80vh], object-cover. Use black/30 overlay if text is over it."
+  },
+  "motion": {
+    "hover": "transition-all duration-300 ease-out",
+    "page_load": "staggered fade-up for list items (itinerary days)",
+    "micro_interactions": "scale-105 on image hover within cards"
+  },
+  "icons": "lucide-react",
+  "media": {
+    "hero_image": {
+      "url": "https://images.unsplash.com/photo-1776059288747-ec1920fb46f8",
+      "description": "Beautiful coastal road trip, hero background"
+    },
+    "place_placeholder_1": {
+      "url": "https://images.unsplash.com/photo-1431274172761-fca41d930114",
+      "description": "Paris Eiffel Tower"
+    },
+    "hotel_placeholder_1": {
+      "url": "https://images.unsplash.com/photo-1611892440504-42a792e24d32",
+      "description": "Luxury hotel room"
+    },
+    "friends_travel": {
+      "url": "https://images.unsplash.com/photo-1548957175-84f0f9af659e",
+      "description": "Friends travelling together, for preferences section"
+    },
+    "map_placeholder": {
+      "url": "https://images.unsplash.com/photo-1774646598667-1c40a1011168",
+      "description": "Abstract topographic map, for background elements"
+    }
+  },
+  "accessibility": {
+    "contrast": "Ensure 4.5:1 ratio. Dark text on light backgrounds.",
+    "test_ids": "MUST include data-testid attribute on all interactive elements (buttons, inputs, links)."
+  },
+  "instructions_to_main_agent": [
+    "Build the landing page using custom Tailwind and raw HTML tags. Add smooth scrolling.",
+    "Use Shadcn UI for the dashboard, form, and trips list, but override their default styles to match the rounded-2xl, soft bento-grid feel.",
+    "Implement the 'Day-by-Day' itinerary view as a vertically stacked bento list. Each day contains horizontal scrolling or grid cards for places and hotels.",
+    "Make sure every 'Place' and 'Hotel' card includes an image, title, description, and an explicit 'Open in Google Maps' button (which can just be a link with target _blank).",
+    "Provide a photo gallery component inside the trip detail page using a masonry or standard grid layout.",
+    "Use 'Outfit' for headings and 'Manrope' for body text. Make sure to import them via Google Fonts.",
+    "Ensure all buttons, links, and forms have data-testid attributes.",
+    "Use lucide-react for all icons."
+  ]
+}
