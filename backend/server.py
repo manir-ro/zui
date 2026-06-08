@@ -15,6 +15,8 @@ from datetime import datetime, timezone, timedelta
 import bcrypt
 import jwt
 
+import asyncio
+import httpx
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 ROOT_DIR = Path(__file__).parent
@@ -105,6 +107,7 @@ class Place(BaseModel):
     image_query: str
     time_of_day: str  # "morning" | "afternoon" | "evening"
     location_query: str  # for google maps
+    image_url: Optional[str] = None
 
 
 class Hotel(BaseModel):
@@ -113,6 +116,7 @@ class Hotel(BaseModel):
     image_query: str
     location_query: str
     price_range: str
+    image_url: Optional[str] = None
 
 
 class DayPlan(BaseModel):
@@ -135,6 +139,7 @@ class Trip(BaseModel):
     overview: str
     itinerary: List[DayPlan]
     cover_image_query: str
+    cover_image_url: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -294,6 +299,166 @@ Return the JSON itinerary now."""
     return extract_json(response)
 
 
+# ============== Image Resolution (Wikipedia + Unsplash fallback) ==============
+WIKI_SEARCH = "https://en.wikipedia.org/w/rest.php/v1/search/page"
+WIKI_SUMMARY = "https://en.wikipedia.org/api/rest_v1/page/summary/"
+WIKI_HEADERS = {
+    "User-Agent": "WanderTravelPlanner/1.0 (https://wander.app; contact@wander.app)",
+    "Accept": "application/json",
+}
+
+
+async def _wiki_image(client: httpx.AsyncClient, query: str, strict: bool = True) -> Optional[str]:
+    """Search Wikipedia and return a high-res image URL, or None.
+
+    Strategy:
+    1. Use MediaWiki REST search to find the most relevant page.
+    2. Verify the page's title shares a significant word with the query (strict mode).
+    3. Try REST `page/summary` for a high-res originalimage; if missing, upscale the
+       small thumbnail returned by search.
+    """
+    try:
+        search_resp = await client.get(
+            WIKI_SEARCH,
+            params={"q": query, "limit": 1},
+            headers=WIKI_HEADERS,
+            timeout=8.0,
+        )
+        if search_resp.status_code != 200:
+            return None
+        pages = search_resp.json().get("pages", [])
+        if not pages:
+            return None
+        page = pages[0]
+        key = page.get("key")
+        title = page.get("title", "")
+        search_thumb = page.get("thumbnail") or {}
+        if not key:
+            return None
+
+        if strict:
+            stopwords = {
+                "the", "of", "and", "an", "in", "on", "at", "to", "for",
+                "hotel", "hôtel", "restaurant", "cafe", "café", "bistro",
+                "bistrot", "bar", "museum", "musée", "park", "tower",
+                "paris", "france", "japan", "tokyo", "new", "york", "city",
+                "de", "la", "le", "du", "des", "et", "et",
+            }
+            strip_chars = ".,'’\"-()&"
+            q_words = {
+                w.lower().strip(strip_chars)
+                for w in query.split()
+                if len(w) > 2
+            } - stopwords
+            t_words = {
+                w.lower().strip(strip_chars)
+                for w in title.split()
+            } - stopwords
+            if q_words and not (q_words & t_words):
+                return None
+
+        # Try REST summary for a high-res original image
+        sum_resp = await client.get(
+            WIKI_SUMMARY + key,
+            headers=WIKI_HEADERS,
+            timeout=8.0,
+            follow_redirects=True,
+        )
+        if sum_resp.status_code == 200:
+            data = sum_resp.json()
+            original = data.get("originalimage", {}).get("source")
+            if original:
+                return original
+            thumb = data.get("thumbnail", {}).get("source")
+            if thumb:
+                return _upscale_wiki_thumb(thumb)
+
+        # Fall back to the search-result thumbnail (upscaled)
+        url = search_thumb.get("url")
+        if url:
+            if url.startswith("//"):
+                url = "https:" + url
+            return _upscale_wiki_thumb(url)
+    except Exception as e:
+        logger.warning(f"Wiki lookup failed for '{query}': {e}")
+    return None
+
+
+def _upscale_wiki_thumb(url: str) -> str:
+    """Upgrade a small Wikimedia thumb URL to a 1200px version when possible."""
+    import re as _re
+    # Pattern: .../thumb/x/xy/Name.jpg/60px-Name.jpg → keep base, change 60 to 1200
+    m = _re.search(r"/(\d+)px-([^/]+)$", url)
+    if m:
+        return url[: m.start()] + f"/1200px-{m.group(2)}"
+    return url
+
+
+def _unsplash_fallback(query: str) -> str:
+    """Deterministic Unsplash featured image URL (no key required)."""
+    return f"https://source.unsplash.com/featured/1200x800/?{requests.utils.quote(query)}"
+
+
+async def resolve_place_image(client: httpx.AsyncClient, place_name: str, destination: str) -> str:
+    """Resolve a place image: Wikipedia first (with destination context), then Unsplash."""
+    if not place_name:
+        return _unsplash_fallback(destination or "travel")
+    # Try place + destination for disambiguation, then bare place name
+    for q in (f"{place_name} {destination}", place_name):
+        url = await _wiki_image(client, q)
+        if url:
+            return url
+    return _unsplash_fallback(place_name)
+
+
+async def resolve_hotel_image(client: httpx.AsyncClient, hotel_name: str, destination: str) -> str:
+    """Hotels rarely have Wikipedia pages — try Wiki for famous ones, else Unsplash hotel-room photos."""
+    if hotel_name:
+        url = await _wiki_image(client, f"{hotel_name} hotel {destination}")
+        if url:
+            return url
+    return _unsplash_fallback(f"{hotel_name or 'luxury'} hotel room {destination}")
+
+
+async def resolve_cover_image(client: httpx.AsyncClient, destination: str) -> str:
+    if not destination:
+        return _unsplash_fallback("travel")
+    url = await _wiki_image(client, destination)
+    return url or _unsplash_fallback(destination)
+
+
+async def enrich_trip_with_images(trip: Trip) -> Trip:
+    """Resolve and inject real image URLs for cover, every place, and every hotel — in parallel."""
+    async with httpx.AsyncClient(follow_redirects=True) as client:
+        tasks = []
+        keys = []
+
+        # Cover image
+        tasks.append(resolve_cover_image(client, trip.destination))
+        keys.append(("cover",))
+
+        for d_idx, day in enumerate(trip.itinerary):
+            for p_idx, place in enumerate(day.places):
+                tasks.append(resolve_place_image(client, place.name, trip.destination))
+                keys.append(("place", d_idx, p_idx))
+            tasks.append(resolve_hotel_image(client, day.hotel.name, trip.destination))
+            keys.append(("hotel", d_idx))
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    for key, url in zip(keys, results):
+        if isinstance(url, Exception) or not url:
+            continue
+        if key[0] == "cover":
+            trip.cover_image_url = url
+        elif key[0] == "place":
+            trip.itinerary[key[1]].places[key[2]].image_url = url
+        elif key[0] == "hotel":
+            trip.itinerary[key[1]].hotel.image_url = url
+
+    return trip
+
+
 # ============== Trip Routes ==============
 @api_router.post("/trips/generate")
 async def generate_trip(payload: TripCreateRequest, current_user: dict = Depends(get_current_user)):
@@ -332,6 +497,18 @@ async def get_trip(trip_id: str, current_user: dict = Depends(get_current_user))
     if not trip:
         raise HTTPException(status_code=404, detail="Trip not found")
     return trip
+
+
+@api_router.post("/trips/{trip_id}/refresh-images")
+async def refresh_trip_images(trip_id: str, current_user: dict = Depends(get_current_user)):
+    """Backfill / refresh real images on an existing trip (for trips created before image enrichment)."""
+    raw = await db.trips.find_one({"id": trip_id, "user_id": current_user["id"]}, {"_id": 0})
+    if not raw:
+        raise HTTPException(status_code=404, detail="Trip not found")
+    trip = Trip(**raw)
+    trip = await enrich_trip_with_images(trip)
+    await db.trips.replace_one({"id": trip_id, "user_id": current_user["id"]}, trip.model_dump())
+    return trip.model_dump()
 
 
 @api_router.delete("/trips/{trip_id}")

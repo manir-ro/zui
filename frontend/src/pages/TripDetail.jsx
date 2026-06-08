@@ -18,6 +18,7 @@ import {
   Hotel as HotelIcon,
   ArrowLeft,
   Trash2,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -87,6 +88,17 @@ export default function TripDetail() {
     }
   };
 
+  const onRefreshImages = async () => {
+    const toastId = toast.loading("Fetching real images…");
+    try {
+      const res = await api.post(`/trips/${id}/refresh-images`);
+      setTrip(res.data);
+      toast.success("Images refreshed!", { id: toastId });
+    } catch {
+      toast.error("Failed to refresh images", { id: toastId });
+    }
+  };
+
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-6 lg:px-12 py-16">
@@ -106,7 +118,7 @@ export default function TripDetail() {
       {/* Hero */}
       <div className="relative rounded-3xl overflow-hidden mb-10 fade-up">
         <img
-          src={unsplashImg(trip.cover_image_query || trip.destination, 1600, 700)}
+          src={trip.cover_image_url || unsplashImg(trip.cover_image_query || trip.destination, 1600, 700)}
           alt={trip.destination}
           className="w-full h-[40vh] sm:h-[55vh] object-cover"
           onError={(e) => {
@@ -131,9 +143,22 @@ export default function TripDetail() {
       </div>
 
       {trip.overview && (
-        <p className="text-lg text-muted-foreground max-w-3xl mb-10 leading-relaxed">
+        <p className="text-lg text-muted-foreground max-w-3xl mb-6 leading-relaxed">
           {trip.overview}
         </p>
+      )}
+
+      {!trip.cover_image_url && (
+        <div className="mb-8">
+          <Button
+            data-testid="refresh-images-btn"
+            onClick={onRefreshImages}
+            variant="outline"
+            className="rounded-full"
+          >
+            <RefreshCw size={14} className="mr-2" /> Fetch real photos for this trip
+          </Button>
+        </div>
       )}
 
       <Tabs defaultValue="itinerary" className="w-full">
@@ -210,7 +235,7 @@ function PlaceCard({ place }) {
     <div className="bg-[#F7F5F0] rounded-2xl overflow-hidden border border-border hover-lift">
       <div className="aspect-[16/10] overflow-hidden">
         <img
-          src={unsplashImg(place.image_query || place.name, 600, 400)}
+          src={place.image_url || unsplashImg(place.image_query || place.name, 600, 400)}
           alt={place.name}
           className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
           onError={(e) => {
@@ -246,7 +271,7 @@ function HotelCard({ hotel }) {
     <div className="bg-gradient-to-br from-[#81B29A]/10 to-white rounded-2xl overflow-hidden border border-border hover-lift h-full flex flex-col">
       <div className="aspect-[16/10] overflow-hidden">
         <img
-          src={unsplashImg(hotel.image_query || hotel.name, 600, 400)}
+          src={hotel.image_url || unsplashImg(hotel.image_query || hotel.name, 600, 400)}
           alt={hotel.name}
           className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
           onError={(e) => {

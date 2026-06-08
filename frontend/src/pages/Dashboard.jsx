@@ -94,7 +94,7 @@ function TripCard({ trip, idx, onDelete }) {
       <Link to={`/trips/${trip.id}`} className="block">
         <div className="aspect-[16/10] overflow-hidden bg-muted">
           <img
-            src={unsplashImg(trip.cover_image_query || trip.destination, 800, 500)}
+            src={trip.cover_image_url || unsplashImg(trip.cover_image_query || trip.destination, 800, 500)}
             alt={trip.destination}
             className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
             onError={(e) => {
