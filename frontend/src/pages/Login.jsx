@@ -30,7 +30,7 @@ export default function Login() {
   return (
     <div className="min-h-[calc(100vh-80px)] flex items-center justify-center px-6 py-16">
       <div className="w-full max-w-md bg-white border border-border rounded-2xl p-10 fade-up">
-        <p className="text-sm uppercase tracking-[0.2em] font-bold text-[#81B29A] mb-3">Welcome back</p>
+        <p className="text-sm uppercase tracking-[0.2em] font-bold text-[#81B29A] mb-3">Welcome back zui</p>
         <h1 className="font-heading text-4xl font-light tracking-tight mb-8">Log in to Wander</h1>
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
